@@ -1,0 +1,27 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'job', 'severity']
+  group_wait: 10s
+  group_interval: 0m
+  repeat_interval: 1h
+  receiver: 'alarmsTopic'
+
+receivers:
+- name: 'alarmsTopic'
+  sns_configs:
+    - topic_arn: arn:aws:sns:your-region:your-id:alarms-topic
+      sigv4:
+        region: eu-central-1
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'dev', 'instance']
+
+
+         
+

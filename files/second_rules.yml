@@ -1,0 +1,17 @@
+groups:
+- name: example
+  rules:
+  - alert: HighRequestLatency
+    expr: job:request_latency_seconds:mean5m{job="myjob"} > 0.5
+    for: 0m
+    labels:
+      severity: page
+    annotations:
+      summary: High request latency
+    
+  - alert: HostHighCpuLoad
+    expr: node_cpu_seconds_total / ignoring(cpu) node_cpu_seconds_total{mode="idle"} > 0.7
+    for: 0m
+    annotations:
+      summary: "High CPU load on {{ $labels.instance }}"
+      description: "{{ $labels.instance }} has a CPU load higher than 30% (current value: {{ $value }})" 

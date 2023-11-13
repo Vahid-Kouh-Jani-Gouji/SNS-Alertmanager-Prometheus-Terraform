@@ -1,0 +1,388 @@
+---
+- name: Install Grafana, Prometheus, and Node Exporter
+  hosts: prometheusServer
+  become: yes
+  tasks:
+    - name: Update package cache and upgrade system packages
+      yum:
+        name: '*'
+        state: latest
+
+    - name: Add Grafana YUM repository
+      yum_repository:
+        name: grafana
+        description: Grafana Stable Repository
+        baseurl: https://packages.grafana.com/oss/rpm
+        gpgcheck: yes
+        gpgkey: https://packages.grafana.com/gpg.key
+
+    - name: Install Grafana package
+      yum:
+        name: grafana
+        state: present
+
+    # - name: Copy Grafana configuration file from GitHub
+    #   get_url:
+    #     url: https://raw.githubusercontent.com/martindubb/random-stuff/main/grafana/grafana.ini
+    #     dest: /etc/grafana/grafana.ini
+    #   notify: Reload Grafana
+    - name: copy config file
+      ansible.builtin.copy:
+        src: files/grafana.ini
+        dest: "/etc/grafana/grafana.ini"
+
+    # - name: Ensure Grafana systemd unit is running
+    #   systemd:
+    #     name: grafana-server
+    #     enabled: yes
+    #     state: started
+    #   notify: Restart Grafana
+    - name: start grafana-server
+      ansible.builtin.systemd:
+        name: grafana-server
+        state: restarted
+    
+    - name: create directory
+      file:
+        path: ~/prometheus
+        state: directory
+    - name: Update package cache and upgrade system packages
+      yum:
+        name: '*'
+        state: latest
+    - name: download prometheus
+      get_url:
+        url: "https://github.com/prometheus/prometheus/releases/download/v2.47.2/prometheus-2.47.2.linux-amd64.tar.gz"
+        dest: "~/prometheus/prometheus-2.47.2.linux-amd64.tar.gz"
+
+    - name: unpack installation files
+      unarchive:
+        src: "~/prometheus/prometheus-2.47.2.linux-amd64.tar.gz"
+        dest: "~/prometheus"
+        remote_src: yes
+
+    - name: move files
+      copy:
+        src: "~/prometheus/prometheus-2.47.2.linux-amd64/"
+        dest: "/usr/local/bin/prometheus/"
+        remote_src: yes
+
+    - name: copy config file
+      ansible.builtin.copy:
+        src: files/prometheus.yml
+        dest: "/usr/local/bin/prometheus/prometheus.yml"
+    - name: create service file
+      copy:
+        dest: "/etc/systemd/system/prometheus.service"
+        content: |
+          [Unit]
+          Description=Prometheus Service
+          After=network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/bin/prometheus/prometheus --config.file=/usr/local/bin/prometheus/prometheus.yml
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: service always restarted
+      systemd:
+        name: prometheus
+        state: restarted
+        enabled: true
+        daemon_reload: yes
+
+    - name: Update all packages
+      yum:
+        name: '*'
+        state: latest
+
+    - name: create directory
+      file:
+        path: ~/node_exporter
+        state: directory
+
+    - name: download node exporter
+      get_url:
+        url: "https://github.com/prometheus/node_exporter/releases/download/v1.6.1/node_exporter-1.6.1.linux-amd64.tar.gz"
+        dest: "~/node_exporter/node_exporter-1.6.1.linux-amd64.tar.gz"
+
+    - name: unpack installation files
+      unarchive:
+        src: "~/node_exporter/node_exporter-1.6.1.linux-amd64.tar.gz"
+        dest: "~/node_exporter"
+        remote_src: yes
+
+    - name: move files
+      copy:
+        src: "~/node_exporter/node_exporter-1.6.1.linux-amd64/"
+        dest: "/usr/local/bin/node_exporter/"
+        remote_src: yes
+
+    - name: create service file
+      copy:
+        dest: "/etc/systemd/system/node_exporter.service"
+        content: |
+          [Unit]
+          Description=Node Exporter Service
+          After=network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/bin/node_exporter/node_exporter
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: service always started
+      systemd:
+        name: node_exporter
+        state: started
+        enabled: true
+
+    - name: Update all packages
+      yum:
+        name: '*'
+        state: latest
+
+    - name: create directory
+      file:
+        path: ~/alertmanager
+        state: directory
+
+    - name: download alertmanager tarball
+      get_url:
+        url: "https://github.com/prometheus/alertmanager/releases/download/v0.26.0/alertmanager-0.26.0.linux-amd64.tar.gz"
+        dest: "~/alertmanager/alertmanager-0.26.0.linux-amd64.tar.gz"
+
+    - name: unpack installation files
+      unarchive:
+        src: "~/alertmanager/alertmanager-0.26.0.linux-amd64.tar.gz"
+        dest: "~/alertmanager"
+        remote_src: yes
+
+    - name: move files
+      copy:
+        src: "~/alertmanager/alertmanager-0.26.0.linux-amd64/"
+        dest: "/usr/local/bin/alertmanager/"
+        remote_src: yes
+
+    - name: create service file
+      copy:
+        dest: "/etc/systemd/system/alertmanager.service"
+        content: |
+          [Unit]
+          Description=Alertmanager
+          After=network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/bin/alertmanager/alertmanager --config.file=/usr/local/bin/alertmanager/alertmanager.yml
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: service always started
+      systemd:
+        name: alertmanager
+        state: restarted
+        enabled: true
+        daemon_reload: yes
+
+  
+
+    # - name: Import GPG key for Prometheus
+    #   rpm_key:
+    #     key: https://packagecloud.io/prometheus-rpm/release/gpgkey
+    #     state: present
+
+    # - name: Add Prometheus YUM repository
+    #   yum_repository:
+    #     name: prometheus
+    #     description: Prometheus repository
+    #     baseurl: https://packagecloud.io/prometheus-rpm/release/el/7/$basearch
+    #     gpgkey: https://packagecloud.io/prometheus-rpm/release/gpgkey
+    #     gpgcheck: no
+
+    # - name: Install Prometheus
+    #   yum:
+    #     name: prometheus
+    #     state: present
+
+    # - name: Create or update Prometheus configuration file
+    #   ansible.builtin.copy:
+    #     dest: "/etc/prometheus/prometheus.yml"
+    #     content: |
+    #       global:
+    #       scrape_interval: 15s
+
+    #     scrape_configs:
+    #       - job_name: 'node_exporter'
+    #         static_configs:
+    #           - targets: ['localhost:9100']  # Node Exporter
+    #   notify: Reload Prometheus
+   
+
+    # - name: Install Alertmanager
+    #   yum:
+    #     name: alertmanager
+    #     state: present
+
+    # - name: Create or update Alertmanager configuration file
+    #   ansible.builtin.template:
+    #     src: alertmanager.yml.j2
+    #     dest: /etc/alertmanager/alertmanager.yml
+    #   notify: Reload Alertmanager
+
+    # - name: Create or update  first Alert file
+    #   ansible.builtin.template:
+    #     src: first_rules.yml.j2
+    #     dest: /etc/prometheus/first_rules.yml
+    #   notify: Reload Prometheus
+
+    # - name: Create or update  second Alert file
+    #   ansible.builtin.template:
+    #     src: second_rules.yml.j2
+    #     dest: /etc/prometheus/second_rules.yml
+    #   notify: Reload Prometheus
+
+    # - name: Ensure Alertmanager systemd unit is running
+    #   systemd:
+    #     name: alertmanager
+    #     enabled: yes
+    #     state: started
+    #   notify: Restart Alertmanager
+
+    # - name: Create or update Prometheus configuration file
+    #   ansible.builtin.template:
+    #     src: prometheus.yml.j2
+    #     dest: /etc/prometheus/prometheus.yml
+    #   notify: Reload Prometheus
+
+
+    # - name: Install Node Exporter
+    #   yum:
+    #     name: node_exporter
+    #     state: present
+
+    # - name: Ensure Prometheus systemd unit is running
+    #   systemd:
+    #     name: prometheus
+    #     enabled: yes
+    #     state: started
+    #   notify: Restart Prometheus
+
+    # - name: Ensure Node Exporter systemd unit is running
+    #   systemd:
+    #     name: node_exporter
+    #     enabled: yes
+    #     state: started
+    #   notify: Restart Node Exporter
+- name:
+  hosts: nodeExporter
+  become: yes
+  tasks:
+    - name: Update all packages
+      yum:
+        name: '*'
+        state: latest
+
+    - name: create directory
+      file:
+        path: ~/node_exporter
+        state: directory
+
+    - name: download node exporter
+      get_url:
+        url: "https://github.com/prometheus/node_exporter/releases/download/v1.6.1/node_exporter-1.6.1.linux-amd64.tar.gz"
+        dest: "~/node_exporter/node_exporter-1.6.1.linux-amd64.tar.gz"
+
+    - name: unpack installation files
+      unarchive:
+        src: "~/node_exporter/node_exporter-1.6.1.linux-amd64.tar.gz"
+        dest: "~/node_exporter"
+        remote_src: yes
+
+    - name: move files
+      copy:
+        src: "~/node_exporter/node_exporter-1.6.1.linux-amd64/"
+        dest: "/usr/local/bin/node_exporter/"
+        remote_src: yes
+
+    - name: create service file
+      copy:
+        dest: "/etc/systemd/system/node_exporter.service"
+        content: |
+          [Unit]
+          Description=Node Exporter Service
+          After=network.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/bin/node_exporter/node_exporter
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: service always started
+      systemd:
+        name: node_exporter
+        state: started
+        enabled: true
+        
+    # - name: Update all packages
+    #   ansible.builtin.apt:
+    #     name: "*"
+    #     state: latest
+
+    # - name: Add Prometheus YUM repository for Node Exporter
+    #   yum_repository:
+    #     name: prometheus
+    #     description: Prometheus repository
+    #     baseurl: https://packagecloud.io/prometheus-rpm/release/el/7/$basearch
+    #     gpgkey: https://packagecloud.io/prometheus-rpm/release/gpgkey
+    #     gpgcheck: no
+
+  #   - name: Install Node Exporter
+  #     yum:
+  #       name: node_exporter
+  #       state: present
+
+  #   - name: Ensure Node Exporter systemd unit is running
+  #     systemd:
+  #       name: node_exporter
+  #       enabled: yes
+  #       state: started
+  #     notify: Restart Node Exporter
+
+  # handlers:
+  #   - name: Reload Grafana
+  #     service:
+  #       name: grafana-server
+  #       state: reloaded
+
+  #   - name: Restart Grafana
+  #     service:
+  #       name: grafana-server
+  #       state: restarted
+
+  #   - name: Reload Prometheus
+  #     service:
+  #       name: prometheus
+  #       state: reloaded
+
+  #   - name: Restart Prometheus
+  #     service:
+  #       name: prometheus
+  #       state: restarted
+
+  #   - name: Restart Node Exporter
+  #     service:
+  #       name: node_exporter
+  #       state: restarted
+    
+  #   - name: Restart Alertmanager
+  #     service:
+  #       name: alertmanager
+  #       state: restarted
